@@ -1,30 +1,43 @@
+"""
+Code Conversion App
 
-'''
-1. **Frameworks and Libraries Used**:
-   - `dotenv`: Used to load environment variables from a `.env` file.
-   - `os`: Used to interact with the operating system.
-   - `streamlit`: Used to create a web application.
-   - `phi.agent` and `phi.model.groq`: Used to initialize and run agents for converting Snowflake stored procedures to requirements in English and then to PySpark code.
+This Streamlit application converts Snowflake stored procedures into PySpark code and calculates the accuracy of the generated PySpark code using different language models.
 
-2. **Environment Variables**:
-   - The code loads environment variables from a `.env` file using the `load_dotenv()` function.
-   - The `GROQ_API_KEY` environment variable is set using the value from the `.env` file.
+Modules:
+    - dotenv: Loads environment variables from a .env file.
+    - os: Provides a way of using operating system dependent functionality.
+    - streamlit: A framework for creating interactive web applications.
+    - agno.agent: Provides the Agent and RunResponse classes for interacting with language models.
+    - agno.models.groq: Provides the Groq model for language processing.
+    - requests: Allows sending HTTP requests.
+    - json: Provides functions for working with JSON data.
 
-3. **Streamlit Application**:
-   - The title of the Streamlit app is set to "Code Conversion App".
-   - A text area is created for the user to paste their Snowflake stored procedure.
+Functions:
+    - convert_snowflake_to_requirements(snowflake_procedure): Converts a Snowflake stored procedure into requirements in English using the Groq model.
+    - convert_requirements_to_pyspark(requirements): Converts requirements in English into PySpark code using the Groq model.
+    - calculate_pyspark_accuracy(pyspark_code): Calculates the accuracy of the generated PySpark code using the deepseek-r1-distill-llama-70b model.
 
-4. **Agent Functions**:
-   - `convert_snowflake_to_requirements(snowflake_procedure)`: 
-     - Initializes a Groq agent with a specific model (`qwen-2.5-coder-32b`).
-     - Runs the agent to convert the Snowflake stored procedure into requirements in English.
-     - Returns the response content.
-   
-   - `convert_requirements_to_pyspark(requirements)`:
-     - Initializes a Phidata agent with a specific model (`qwen-2.5-coder-32b`).
-     - Runs the agent to convert the requirements into PySpark code.
-     - Returns the response content.
-'''
+Streamlit Components:
+    - Text areas for inputting Snowflake stored procedures, displaying requirements, PySpark code, and metrics.
+    - Buttons for reading Snowflake stored procedures, saving requirements, converting requirements to PySpark code, and calculating the accuracy of the PySpark code.
+
+Session State Variables:
+    - requirements: Stores the requirements in English.
+    - pyspark_code: Stores the generated PySpark code.
+    - pyspark_metrics: Stores the metrics for the PySpark code generation.
+    - snowflake_metrics: Stores the metrics for the Snowflake to requirements conversion.
+    - pyspark_accuracy: Stores the accuracy of the generated PySpark code.
+    - accuracy_metrics: Stores the metrics for the PySpark code accuracy calculation.
+
+Usage:
+    1. Paste your Snowflake stored procedure in the provided text area.
+    2. Click "Read Snowflake" to convert the stored procedure into requirements in English.
+    3. Edit the requirements if necessary and click "Save Requirements".
+    4. Click "Convert to PySpark" to generate PySpark code from the requirements.
+    5. Click "Calculate Accuracy" to calculate the accuracy of the generated PySpark code.
+    6. View the generated PySpark code, metrics, and accuracy in the respective text areas.
+"""
+
 from dotenv import load_dotenv
 import os
 import streamlit as st
@@ -47,6 +60,15 @@ st.title("Code Conversion App")
 snowflake_input = st.text_area("Paste your Snowflake stored procedure here:", key="snowflake_input")
 
 def convert_snowflake_to_requirements(snowflake_procedure):
+    """
+    Converts a Snowflake stored procedure into requirements in English using the Groq model.
+
+    Args:
+        snowflake_procedure (str): The Snowflake stored procedure to be converted.
+
+    Returns:
+        tuple: A tuple containing the requirements in English and the metrics for the conversion.
+    """
     # Initialize the Groq agent
     agent = Agent(
         model=Groq(id="qwen-2.5-coder-32b"),
@@ -58,6 +80,15 @@ def convert_snowflake_to_requirements(snowflake_procedure):
     return run.content, run.metrics
 
 def convert_requirements_to_pyspark(requirements):
+    """
+    Converts requirements in English into PySpark code using the Groq model.
+
+    Args:
+        requirements (str): The requirements in English to be converted.
+
+    Returns:
+        tuple: A tuple containing the generated PySpark code and the metrics for the conversion.
+    """
     # Initialize the Agno agent
     agent = Agent(
         model=Groq(id="qwen-2.5-coder-32b"),
@@ -65,6 +96,25 @@ def convert_requirements_to_pyspark(requirements):
     )
     # Get the response in a variable
     run: RunResponse = agent.run(f"Convert the following requirements into PySpark code:\n\n{requirements}")
+    return run.content, run.metrics
+
+def calculate_pyspark_accuracy(pyspark_code):
+    """
+    Calculates the accuracy of the generated PySpark code using the deepseek-r1-distill-llama-70b model.
+
+    Args:
+        pyspark_code (str): The generated PySpark code to be evaluated.
+
+    Returns:
+        tuple: A tuple containing the accuracy of the PySpark code and the metrics for the accuracy calculation.
+    """
+    # Initialize the accuracy agent
+    agent = Agent(
+        model=Groq(id="deepseek-r1-distill-llama-70b"),
+        markdown=True
+    )
+    # Get the response in a variable
+    run: RunResponse = agent.run(f"Calculate the accuracy of the following PySpark code in %:\n\n{pyspark_code}")
     return run.content, run.metrics
 
 # Initialize a session state for requirements and metrics to persist between button clicks
@@ -79,6 +129,12 @@ if 'pyspark_metrics' not in st.session_state:
 
 if 'snowflake_metrics' not in st.session_state:
     st.session_state.snowflake_metrics = ""
+
+if 'pyspark_accuracy' not in st.session_state:
+    st.session_state.pyspark_accuracy = ""
+
+if 'accuracy_metrics' not in st.session_state:
+    st.session_state.accuracy_metrics = ""
 
 if st.button("Read Snowflake"):
     st.session_state.requirements, st.session_state.snowflake_metrics = convert_snowflake_to_requirements(snowflake_input)
@@ -101,45 +157,21 @@ if st.button("Convert to PySpark"):
     else:
         st.error("Please generate the requirements first by clicking 'Read Snowflake'.")
 
-# # Display the PySpark code and metrics if available
-# if st.session_state.pyspark_code:
-#     st.text_area("PySpark Code:", value=st.session_state.pyspark_code, key="pyspark_code")
-#     st.text_area("PySpark agent tokens:", value=st.session_state.pyspark_metrics, key="pyspark_metrics")
-#     st.text_area("Snowflake agent tokens:", value=st.session_state.snowflake_metrics, key="snowflake_metrics_display")
-
+# Button to calculate accuracy of PySpark code
+if st.button("Calculate Accuracy"):
+    if st.session_state.pyspark_code:
+        st.session_state.pyspark_accuracy, st.session_state.accuracy_metrics = calculate_pyspark_accuracy(st.session_state.pyspark_code)
+        st.session_state.accuracy_metrics = str(st.session_state.accuracy_metrics) if st.session_state.accuracy_metrics else ""
+    else:
+        st.error("Please convert the requirements to PySpark code first by clicking 'Convert to PySpark'.")
 
 # Display the PySpark code and metrics if available
 if st.session_state.pyspark_code:
     st.text_area("PySpark Code:", value=st.session_state.pyspark_code, key="pyspark_code")
-    
-    # Extract and format PySpark agent tokens
-    pyspark_metrics = st.session_state.pyspark_metrics
-    
-    # Debugging: Print the entire pyspark_metrics dictionary
-    print("pyspark_metrics:", pyspark_metrics)
-    
-    # Check if the metrics are in the expected format
-    if isinstance(pyspark_metrics, dict):
-        try:
-            input_tokens = pyspark_metrics['input_tokens'][0]
-            output_tokens = pyspark_metrics['output_tokens'][0]
-            total_tokens = pyspark_metrics['total_tokens'][0]
-            
-            # Debugging: Print the extracted token values
-            print("input_tokens:", input_tokens)
-            print("output_tokens:", output_tokens)
-            print("total_tokens:", total_tokens)
-            
-            # Display the formatted tokens
-            formatted_tokens = f"input_tokens={input_tokens}, output_tokens={output_tokens}, total_tokens={total_tokens}"
-            print("formatted_tokens:", formatted_tokens)
-            st.text_area("PySpark agent tokens:", value=formatted_tokens, key="pyspark_metrics_display")
-        except (KeyError, IndexError, TypeError) as e:
-            print("Error extracting metrics:", e)
-            st.text_area("PySpark agent tokens:", value="Metrics data is not in the expected format.", key="pyspark_metrics_display_error_1")
-    else:
-        print("Metrics data is not in the expected format.")
-        st.text_area("PySpark agent tokens:", value="Metrics data is not in the expected format.", key="pyspark_metrics_display_error_2")
-    
-    # Display Snowflake agent tokens
+    st.text_area("PySpark agent tokens:", value=st.session_state.pyspark_metrics, key="pyspark_metrics")
     st.text_area("Snowflake agent tokens:", value=st.session_state.snowflake_metrics, key="snowflake_metrics_display")
+
+# Display the PySpark code accuracy and metrics if available
+if st.session_state.pyspark_accuracy:
+    st.text_area("PySpark Code Accuracy:", value=st.session_state.pyspark_accuracy, key="pyspark_accuracy")
+    st.text_area("Accuracy agent tokens:", value=st.session_state.accuracy_metrics, key="accuracy_metrics")
